@@ -11,34 +11,41 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 def get_mail_csv(service):
 
-    mails_from_label = service.users().messages().list(userId="me", labelIds = ['Label_6410322614978152058']).execute()
+    # GET CAR-COPILOT LABEL MAIL LISTS
+    mails_from_label = service.users().messages().list(userId="me", labelIds = ['UNREAD','Label_6410322614978152058']).execute()
     
-    
+    # AVOID ERROR IF NO MAIL IN LABEL
     if(mails_from_label["resultSizeEstimate"] > 0) :
+      
+      # GET THE LAST MAIL
       mail_id = mails_from_label["messages"][0]["id"]
       specific_mail = service.users().messages().get(userId="me", id=mail_id).execute()
     
+      # [FINAL] GET THE CAR NAME
       car_name = specific_mail["snippet"]
       # html_car_name = base64.b64decode(specific_mail["payload"]["parts"][0]["parts"][1]["body"]["data"], altchars=b'-_')
       # car_name = html_car_name.decode('utf-8') #.split("<")[2].split(">")[1]
       
+      # [FINAL] GET THE EXPEDITOR
       headers = specific_mail["payload"]["headers"]
       mail_sender = "Unknown"
       for k in headers :
         if (k["name"] == 'Return-Path') :
           mail_sender = k["value"]
       
+      # GET THE CSV DATA
       att_id = specific_mail["payload"]["parts"][1]["body"]["attachmentId"]
       csv_file = service.users().messages().attachments().get(userId="me", messageId=mail_id, id=att_id).execute()
       csv_data = base64.b64decode(csv_file["data"], altchars=b'-_')
       
+      # WRITE THE CSV DATA IN LOCAL CSV
       f = open("influx_data.csv", "w")
       f.write(csv_data.decode('utf-8'))
       f.close()
 
       return (car_name, mail_sender)
     
-    return ("No mails in 'car-copilot' label")
+    return ("No unread mails in 'car-copilot' label")
 
 
 def main():
@@ -67,12 +74,11 @@ def main():
   try:
     # Call the Gmail API
     service = build("gmail", "v1", credentials=creds)
-    car_name = get_mail_csv(service)
+    mail_info = get_mail_csv(service)
     
-    print(car_name)
+    print(mail_info)
 
   except HttpError as error:
-    # TODO(developer) - Handle errors from gmail API.
     print(f"An error occurred: {error}")
 
 
