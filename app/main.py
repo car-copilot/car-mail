@@ -1,5 +1,6 @@
 import os.path
 import base64
+import time, signal
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -7,7 +8,16 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 # If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.modify"]
+
+class GracefulKiller:
+  kill_now = False
+  def __init__(self):
+    signal.signal(signal.SIGINT, self.exit_gracefully)
+    signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+  def exit_gracefully(self, signum, frame):
+    self.kill_now = True
 
 def get_mail_csv(service):
 
@@ -31,7 +41,7 @@ def get_mail_csv(service):
       mail_sender = "Unknown"
       for k in headers :
         if (k["name"] == 'Return-Path') :
-          mail_sender = k["value"]
+          mail_sender = k["value"].split("<")[1].split(">")[0]
       
       # GET THE CSV DATA
       att_id = specific_mail["payload"]["parts"][1]["body"]["attachmentId"]
@@ -42,6 +52,9 @@ def get_mail_csv(service):
       f = open("influx_data.csv", "w")
       f.write(csv_data.decode('utf-8'))
       f.close()
+      
+      # READ THE MESSAGE WHEN THREATED
+      service.users().messages().modify(userId="me", id=mail_id, body={"removeLabelIds": ['UNREAD']}).execute()
 
       return (car_name, mail_sender)
     
@@ -74,9 +87,13 @@ def main():
   try:
     # Call the Gmail API
     service = build("gmail", "v1", credentials=creds)
-    mail_info = get_mail_csv(service)
     
-    print(mail_info)
+    killer = GracefulKiller()
+    while not killer.kill_now:
+      mail_info = get_mail_csv(service)
+      print(mail_info)
+      time.sleep(120)
+    print("End of the program. I was killed gracefully")
 
   except HttpError as error:
     print(f"An error occurred: {error}")
