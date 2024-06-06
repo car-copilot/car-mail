@@ -1,6 +1,7 @@
 import os.path
 import base64
 import time, signal
+import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -42,6 +43,9 @@ def get_mail_csv(service):
       for k in headers :
         if (k["name"] == 'Return-Path') :
           mail_sender = k["value"].split("<")[1].split(">")[0]
+          
+      # GET THE CSV FILE NAME
+      file_name = specific_mail["payload"]["parts"][1]["filename"]
       
       # GET THE CSV DATA
       att_id = specific_mail["payload"]["parts"][1]["body"]["attachmentId"]
@@ -49,17 +53,42 @@ def get_mail_csv(service):
       csv_data = base64.b64decode(csv_file["data"], altchars=b'-_')
       
       # WRITE THE CSV DATA IN LOCAL CSV
-      f = open("influx_data.csv", "w")
-      f.write(csv_data.decode('utf-8'))
-      f.close()
+      # f = open("influx_data.csv", "w")
+      # f.write(csv_data.decode('utf-8'))
+      # f.close()
       
       # READ THE MESSAGE WHEN THREATED
       service.users().messages().modify(userId="me", id=mail_id, body={"removeLabelIds": ['UNREAD']}).execute()
 
-      return (car_name, mail_sender)
+      return send_infos(car_name, mail_sender, file_name, csv_data)
+      
+    return("No unread mails in 'car-copilot' label")
     
-    return ("No unread mails in 'car-copilot' label")
+    
+    
 
+def send_infos(car_name, mail_sender, file_name, csv_data):
+
+  url = "localhost:8080/ingest"
+
+  payload = {
+    'car': car_name,
+    'owner': mail_sender,
+    'filename': file_name
+  }
+  files=[
+    ('file',(file_name, csv_data,'text/csv'))
+  ]
+  headers = {}
+
+  response = requests.request("POST", url, headers=headers, data=payload, files=files)
+
+  print(response.text)
+  
+  return("Data sent to DB")
+  
+  
+  
 
 def main():
   """Shows basic usage of the Gmail API.
@@ -90,8 +119,7 @@ def main():
     
     killer = GracefulKiller()
     while not killer.kill_now:
-      mail_info = get_mail_csv(service)
-      print(mail_info)
+      print(get_mail_csv(service))
       time.sleep(120)
     print("End of the program. I was killed gracefully")
 
