@@ -69,7 +69,7 @@ def get_mail_csv(service):
 
 def send_infos(car_name, mail_sender, file_name, csv_data):
 
-  url = "localhost:8080/ingest"
+  url = "http://localhost:8080/ingest"
 
   payload = {
     'car': car_name,
