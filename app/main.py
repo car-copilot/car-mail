@@ -1,4 +1,5 @@
 import os.path
+import os
 import base64
 import time, signal
 import requests
@@ -69,7 +70,7 @@ def get_mail_csv(service):
 
 def send_infos(car_name, mail_sender, file_name, csv_data):
 
-  url = "http://localhost:8080/ingest"
+  url = os.environ["API_URL"]
 
   payload = {
     'car': car_name,
